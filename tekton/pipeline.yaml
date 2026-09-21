@@ -1,0 +1,130 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: openshift-devops-demo
+
+spec:
+  params:
+    - name: repo-url
+      type: string
+      default: https://github.com/soufianayadi@googlemail.com/openshift-devops-demo.git
+
+    - name: revision
+      type: string
+      default: main
+
+  tasks:
+
+    - name: clone
+      taskSpec:
+        params:
+          - name: repo-url
+            type: string
+          - name: revision
+            type: string
+
+        steps:
+          - name: clone
+            image: alpine/git:latest
+            script: |
+              #!/bin/sh
+              set -eu
+
+              echo "Hole Source Code aus Git ..."
+
+              git clone \
+                --depth 1 \
+                --branch "$(params.revision)" \
+                "$(params.repo-url)" \
+                /tmp/source
+
+              echo
+              echo "Source Code erfolgreich geladen ✓"
+
+      params:
+        - name: repo-url
+          value: $(params.repo-url)
+
+        - name: revision
+          value: $(params.revision)
+
+
+    - name: test
+      runAfter:
+        - clone
+
+      taskSpec:
+        params:
+          - name: repo-url
+            type: string
+
+          - name: revision
+            type: string
+
+        steps:
+          - name: run-tests
+            image: alpine/git:latest
+            script: |
+              #!/bin/sh
+              set -eu
+
+              git clone \
+                --depth 1 \
+                --branch "$(params.revision)" \
+                "$(params.repo-url)" \
+                /tmp/source
+
+              cd /tmp/source
+
+              sh test.sh
+
+      params:
+        - name: repo-url
+          value: $(params.repo-url)
+
+        - name: revision
+          value: $(params.revision)
+
+
+    - name: build
+      runAfter:
+        - test
+
+      taskSpec:
+        steps:
+          - name: build-container
+            image: quay.io/openshift/origin-cli:4.22
+            script: |
+              #!/bin/sh
+              set -eu
+
+              echo "Starte Container Build ..."
+
+              oc start-build azubi-demo \
+                --wait \
+                --follow
+
+              echo
+              echo "Container Image erfolgreich gebaut ✓"
+
+
+    - name: deploy
+      runAfter:
+        - build
+
+      taskSpec:
+        steps:
+          - name: wait-for-deployment
+            image: quay.io/openshift/origin-cli:4.22
+            script: |
+              #!/bin/sh
+              set -eu
+
+              echo "Warte auf Deployment ..."
+
+              oc rollout status \
+                deployment/azubi-demo \
+                --timeout=180s
+
+              echo
+              echo "Neue Version erfolgreich deployed ✓"
