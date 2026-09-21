@@ -7,7 +7,7 @@ spec:
   params:
     - name: repo-url
       type: string
-      default: https://github.com/soufianayadi@googlemail.com/openshift-devops-demo.git
+      default: https://github.com/SoufianAy/openshift-devops-demo.git
 
     - name: revision
       type: string
